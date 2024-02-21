@@ -3,7 +3,7 @@ import time
 import logging
 from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler, FileSystemEventHandler
-# from TemplateLoader import TemplateLoader, fillTemplate
+from SimpleTemplate import SimpleTemplate
 
 # templates = {}
 
@@ -19,14 +19,20 @@ class SimpleTemplateHandler(FileSystemEventHandler):
         self.last_trigger_time = current_time
         print("\n\n", event.event_type, "event for", event.src_path)
         
-        # processHTMLFile(event.src_path)
+        st.ProcessAfterChange(event.src_path)
     
 
 if __name__ == "__main__":
-    config_path = "./tml_config.json" # default config file to use
+    path = "."
     if len(sys.argv) > 1:
-        config_path = sys.argv[1]
+        path = sys.argv[1]
     
+    config_path = "./tml_config.json" # default config file to use
+    if len(sys.argv) > 2:
+        config_path = sys.argv[2]
+    
+    st = SimpleTemplate(configPath=config_path)
+    st.ProcessAll()
     
     
     event_handler = SimpleTemplateHandler()

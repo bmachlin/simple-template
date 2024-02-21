@@ -9,6 +9,7 @@ import Dependencies
 
 class SimpleTemplate:
     def __init__(self, config=None, configPath=None):
+        self.firstPass = False
         self.htmlFiles = []
         self.templates = []
         self.processOrder = []
@@ -25,9 +26,9 @@ class SimpleTemplate:
             "TEMPLATE_DIR": "templates",
             "INPUT_DIR": ".",
             "EXCLUDE_ALL": [],
-            "EXCLUDED_HTML": [],
-            "EXCLUDED_TEMPLATE": [],
-            "EXCLUDED_COPY": [],
+            "EXCLUDE_HTML": [],
+            "EXCLUDE_TEMPLATE": [],
+            "EXCLUDE_COPY": [],
         }
 
         # apply zero, one, or both config options
@@ -37,6 +38,13 @@ class SimpleTemplate:
             self.LoadConfig(config)
 
     ########## CONFIG ##########
+    
+    def ShouldExclude(self, excludePatterns, fp):
+        for pattern in excludePatterns:
+            if fnmatch(fp, pattern):
+                print("Excluding", fp, "because of", pattern)
+                return True
+        return False
 
     # Loads and applies a config file given a path
     def LoadConfigFromPath(self, path):
@@ -71,24 +79,27 @@ class SimpleTemplate:
 
     def GetHtmlFilePaths(self):
         fps = []
-        ignorePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDED_HTML"]
+        excludePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_HTML"]
         for root, dirs, files in os.walk(self.config["INPUT_DIR"]):
             for file in files:
-                if file.endswith(".html") and not any(fnmatch(os.path.join(root, file), pattern) for pattern in ignorePatters):
-                    # print(os.path.join(root, file))
+                fp = os.path.normpath(os.path.join(root, file))
+                if file.endswith(".html") and not self.ShouldExclude(excludePatters, fp):
+                    print("Loading html", fp)
                     obj = FileObject()
-                    obj.path = os.path.join(root, file)
+                    obj.path = fp
                     fps.append(obj)
         return fps
 
     def GetTemplateFilePaths(self):
         fps = []
-        ignorePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDED_TEMPLATE"]
+        excludePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_TEMPLATE"]
         for root, dirs, files in os.walk(self.config["TEMPLATE_DIR"]):
             for file in files:
-                if file.endswith(".tml") and not any(fnmatch(os.path.join(root, file), pattern) for pattern in ignorePatters):
+                fp = os.path.normpath(os.path.join(root, file))
+                if file.endswith(".tml") and not self.ShouldExclude(excludePatters, fp):
+                    print("Loading tml", fp)
                     obj = Template()
-                    obj.path = os.path.join(root, file)
+                    obj.path = fp
                     fps.append(obj)
         return fps
 
@@ -153,13 +164,11 @@ class SimpleTemplate:
 
             # replace the variable with the value if it exists
             if value is not None:
-                content = content.replace(
-                    self.config["TEMPLATE_VAR_START"]
-                    + v
-                    + self.config["TEMPLATE_VAR_END"],
-                    value,
-                )
+                content = content.replace(self.config["TEMPLATE_VAR_START"] + v + self.config["TEMPLATE_VAR_END"], value)
 
+        print(template.id)
+        if template.id == "navbar":
+            print(content)
         return content
 
     def FillFile(self, file):
@@ -190,28 +199,68 @@ class SimpleTemplate:
     ########## OUTPUT ##########
 
     def CopyInputDirectory(self):
-        # print("Copying files from", self.inputRoot, "to", self.outputRoot)
-        ignorePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDED_COPY"]
-        def ignoreFn(path, names):
-            ignored = []
+        excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
+        def excludeFn(path, names):
+            excluded = []
             for name in names:
-                # print(os.path.join(os.path.normpath(path), name))
-                for pattern in ignorePatterns:
-                    fp = os.path.join(os.path.normpath(path), name)
-                    if fnmatch(fp, pattern):
-                        print("Not copying", fp, "because of", pattern)
-                        ignored.append(name)
-            return ignored
+                fp = os.path.join(os.path.normpath(path), name)
+                if os.path.isdir(fp):
+                    fp += "/"
+                if self.ShouldExclude(excludePatterns, fp):
+                    excluded.append(name)
+            return excluded
         
-        shutil.copytree(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"], dirs_exist_ok=True, ignore=ignoreFn)
+        print("will copy", self.config["INPUT_DIR"], "to", self.config["OUTPUT_DIR"])
+        shutil.copytree(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"], dirs_exist_ok=True, ignore=excludeFn)
+
+    def CopyFile(self, fp):
+        excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
+        if not self.ShouldExclude(excludePatterns, fp):
+            shutil.copy(fp, fp.replace(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"]))
+        
 
     def OutputProcessedFiles(self):
         # print("Outputting processed files to", self.outputRoot)
         # os.umask(0o077) # do I need this?
         for h in self.htmlFiles:
+            # skip outputting files that have no dependencies, i.e. were not changed
+            if not h.dependencies:
+                continue
             # set path to replace input directory with output directory
-            path = h.path.replace(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"])
-            # print(path)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as file:
-                file.write(h.content)
+            path = h.path.replace(os.path.normpath(self.config["INPUT_DIR"]), os.path.normpath(self.config["OUTPUT_DIR"]))
+            print("will write", h.path, "to", path)
+            # os.makedirs(os.path.dirname(path), exist_ok=True)
+            # with open(path, "w", encoding="utf-8") as file:
+            #     file.write(h.content)
+                
+    ########## PROCESSING ##########
+    
+    def ProcessAll(self):
+        print("GO")
+        self.LoadHtmlFiles()
+        self.LoadTemplates()
+        self.FindTemplateDependencies()
+        self.FindHtmlDependencies()
+        self.TopologicalSort()
+        self.FillAllFiles()
+        self.CopyInputDirectory()
+        self.OutputProcessedFiles()
+        self.firstPass = True
+        
+    def ProcessAfterChange(self, fileChanged):
+        if not self.firstPass:
+            self.ProcessAll()
+            return
+        
+        fileChanged = os.path.normpath(fileChanged)
+        
+        if fileChanged in [x.path for x in self.htmlFiles]:
+            self.ProcessAll()
+            return
+        
+        if fileChanged in [x.path for x in self.templates]:
+            self.ProcessAll()
+            return
+        
+        self.CopyFile(fileChanged)
+        
