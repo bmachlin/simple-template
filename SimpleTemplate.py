@@ -22,13 +22,14 @@ class SimpleTemplate:
             "TEMPLATE_SECTION_SPLIT": "\n%\n",
             "EMPTY_VAR_REPLACE": True,
             "EMPTY_VAR_VALUE": "",
+            "INPUT_DIR": ".",
             "OUTPUT_DIR": "output",
             "TEMPLATE_DIR": "templates",
-            "INPUT_DIR": ".",
             "EXCLUDE_ALL": [],
             "EXCLUDE_HTML": [],
             "EXCLUDE_TEMPLATE": [],
             "EXCLUDE_COPY": [],
+            "OVERWRITE_ALLOWED": False,
         }
 
         # apply zero, one, or both config options
@@ -216,7 +217,8 @@ class SimpleTemplate:
     def CopyFile(self, fp):
         excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
         if not self.ShouldExclude(excludePatterns, fp):
-            shutil.copy(fp, fp.replace(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"]))
+            newFp = fp.replace(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"])
+            shutil.copy(fp, newFp)
         
 
     def OutputProcessedFiles(self):
@@ -229,9 +231,12 @@ class SimpleTemplate:
             # set path to replace input directory with output directory
             path = h.path.replace(os.path.normpath(self.config["INPUT_DIR"]), os.path.normpath(self.config["OUTPUT_DIR"]))
             print("will write", h.path, "to", path)
-            # os.makedirs(os.path.dirname(path), exist_ok=True)
-            # with open(path, "w", encoding="utf-8") as file:
-            #     file.write(h.content)
+            if h.path == path and not self.config["OVERWRITE_ALLOWED"]:
+                print("Will not overwrite", h.path)
+                return
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(h.content)
                 
     ########## PROCESSING ##########
     

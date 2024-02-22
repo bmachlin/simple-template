@@ -4,11 +4,12 @@
     "TEMPLATE_SECTION_SPLIT": "\n%\n",
     "EMPTY_VAR_REPLACE": true,
     "EMPTY_VAR_VALUE": "",
+    "INPUT_DIR": "../bmachlin",
     "OUTPUT_DIR": "../output",
     "TEMPLATE_DIR": "../bmachlin/templates",
-    "INPUT_DIR": "../bmachlin",
     "EXCLUDE_ALL": ["*/.git/*", "*/node_modules", "*/__pycache__", "*.DS_Store"],
     "EXCLUDE_HTML": ["*/chronography/*"],
     "EXCLUDE_TEMPLATE": [],
-    "EXCLUDE_COPY": []
+    "EXCLUDE_COPY": [],
+    "OVERWRITE_ALLOWED": false
 }
