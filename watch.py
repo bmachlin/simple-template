@@ -24,16 +24,17 @@ class SimpleTemplateHandler(FileSystemEventHandler):
 
 if __name__ == "__main__":
     path = "."
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-    
     config_path = "./tml_config.json" # default config file to use
-    if len(sys.argv) > 2:
-        config_path = sys.argv[2]
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
     
+    print("config path", config_path)
     st = SimpleTemplate(configPath=config_path)
+    print("input dir", st.config["INPUT_DIR"])
+    print("output dir", st.config["OUTPUT_DIR"])
     st.ProcessAll()
     
+    path = st.config["INPUT_DIR"]
     
     event_handler = SimpleTemplateHandler()
     observer = Observer()

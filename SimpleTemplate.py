@@ -4,12 +4,13 @@ from bs4 import BeautifulSoup
 from FileObject import FileObject
 from Template import Template
 from TemplateLoader import TemplateLoader
+from os.path import normpath
 import Dependencies
 
 
 class SimpleTemplate:
     def __init__(self, config=None, configPath=None):
-        self.firstPass = False
+        self.firstPass = True
         self.htmlFiles = []
         self.templates = []
         self.processOrder = []
@@ -24,7 +25,7 @@ class SimpleTemplate:
             "EMPTY_VAR_VALUE": "",
             "INPUT_DIR": ".",
             "OUTPUT_DIR": "output",
-            "TEMPLATE_DIR": "templates",
+            "TEMPLATE_DIR": ".",
             "EXCLUDE_ALL": [],
             "EXCLUDE_HTML": [],
             "EXCLUDE_TEMPLATE": [],
@@ -37,15 +38,24 @@ class SimpleTemplate:
             self.LoadConfigFromPath(configPath)
         if config is not None:
             self.LoadConfig(config)
+    
+    def Reset(self):
+        self.htmlFiles = []
+        self.templates = []
+        self.processOrder = []
 
     ########## CONFIG ##########
     
     def ShouldExclude(self, excludePatterns, fp):
         for pattern in excludePatterns:
             if fnmatch(fp, pattern):
-                print("Excluding", fp, "because of", pattern)
+                # print("Excluding", fp, "because of", pattern)
                 return True
         return False
+
+    def IsHtmlOrTemplate(self, fp):
+        paths = [x.path for x in self.htmlFiles] + [x.path for x in self.templates]
+        return any(fnmatch(fp, x) for x in paths)
 
     # Loads and applies a config file given a path
     def LoadConfigFromPath(self, path):
@@ -83,9 +93,9 @@ class SimpleTemplate:
         excludePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_HTML"]
         for root, dirs, files in os.walk(self.config["INPUT_DIR"]):
             for file in files:
-                fp = os.path.normpath(os.path.join(root, file))
+                fp = normpath(os.path.join(root, file))
                 if file.endswith(".html") and not self.ShouldExclude(excludePatters, fp):
-                    print("Loading html", fp)
+                    # print("Loading html", fp)
                     obj = FileObject()
                     obj.path = fp
                     fps.append(obj)
@@ -96,9 +106,9 @@ class SimpleTemplate:
         excludePatters = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_TEMPLATE"]
         for root, dirs, files in os.walk(self.config["TEMPLATE_DIR"]):
             for file in files:
-                fp = os.path.normpath(os.path.join(root, file))
+                fp = normpath(os.path.join(root, file))
                 if file.endswith(".tml") and not self.ShouldExclude(excludePatters, fp):
-                    print("Loading tml", fp)
+                    # print("Loading tml", fp)
                     obj = Template()
                     obj.path = fp
                     fps.append(obj)
@@ -167,9 +177,6 @@ class SimpleTemplate:
             if value is not None:
                 content = content.replace(self.config["TEMPLATE_VAR_START"] + v + self.config["TEMPLATE_VAR_END"], value)
 
-        print(template.id)
-        if template.id == "navbar":
-            print(content)
         return content
 
     def FillFile(self, file):
@@ -204,20 +211,23 @@ class SimpleTemplate:
         def excludeFn(path, names):
             excluded = []
             for name in names:
-                fp = os.path.join(os.path.normpath(path), name)
+                fp = os.path.join(normpath(path), name)
                 if os.path.isdir(fp):
                     fp += "/"
-                if self.ShouldExclude(excludePatterns, fp):
+                if self.ShouldExclude(excludePatterns, fp) or self.IsHtmlOrTemplate(fp):
                     excluded.append(name)
             return excluded
         
-        print("will copy", self.config["INPUT_DIR"], "to", self.config["OUTPUT_DIR"])
+        # print("will copy", self.config["INPUT_DIR"], "to", self.config["OUTPUT_DIR"])
         shutil.copytree(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"], dirs_exist_ok=True, ignore=excludeFn)
 
     def CopyFile(self, fp):
         excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
         if not self.ShouldExclude(excludePatterns, fp):
-            newFp = fp.replace(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"])
+            newFp = fp.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]))
+            if newFp == fp:
+                print("Will not overwrite", fp, self.config["INPUT_DIR"], self.config["OUTPUT_DIR"])
+                return
             shutil.copy(fp, newFp)
         
 
@@ -229,8 +239,8 @@ class SimpleTemplate:
             if not h.dependencies:
                 continue
             # set path to replace input directory with output directory
-            path = h.path.replace(os.path.normpath(self.config["INPUT_DIR"]), os.path.normpath(self.config["OUTPUT_DIR"]))
-            print("will write", h.path, "to", path)
+            path = h.path.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]))
+            # print("will write", h.path, "to", path)
             if h.path == path and not self.config["OVERWRITE_ALLOWED"]:
                 print("Will not overwrite", h.path)
                 return
@@ -242,6 +252,7 @@ class SimpleTemplate:
     
     def ProcessAll(self):
         print("GO")
+        self.Reset()
         self.LoadHtmlFiles()
         self.LoadTemplates()
         self.FindTemplateDependencies()
@@ -250,14 +261,14 @@ class SimpleTemplate:
         self.FillAllFiles()
         self.CopyInputDirectory()
         self.OutputProcessedFiles()
-        self.firstPass = True
+        self.firstPass = False
         
     def ProcessAfterChange(self, fileChanged):
-        if not self.firstPass:
+        if self.firstPass:
             self.ProcessAll()
             return
         
-        fileChanged = os.path.normpath(fileChanged)
+        fileChanged = normpath(fileChanged)
         
         if fileChanged in [x.path for x in self.htmlFiles]:
             self.ProcessAll()
