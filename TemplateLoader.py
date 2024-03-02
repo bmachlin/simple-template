@@ -8,6 +8,7 @@ class TemplateLoader:
         self.TEMPLATE_SECTION_SPLIT = "\n%\n"
         self.TEMPLATE_VAR_START = "{{"
         self.TEMPLATE_VAR_END = "}}"
+        self.INNER_HTML_VAR = "_inner_"
         
 
     # parse template object from file data

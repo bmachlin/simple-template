@@ -4,7 +4,7 @@
 
 Simple Template is a simple templating library for developing websites. You define HTML-esque templates, reference them in your HTML files, then run the build process.
 
-Template files have a .tml (Template Markup Language) extension and live together in one folder. The have the form:
+Template files have a .tml ([Template Markup Language](Template.md)) extension and live together in one folder. The have the form:
 ```
 thing
 %
@@ -38,18 +38,20 @@ The third section is the actual template, including variables.
 
 Templates can reference other templates (but be wary of dependency cycles).
 
+See [Template.md](Template.md) for full details.
+
 ## Workflow
 
 ### Build
 To build your website, run:
 
-```python build.py [config_path]```
+`python build.py [config_path]`
 
 or to achieve live-reload, use:
 
-```python watch.py [path_to_watch_folder] [config_path]```
+`python build.py [config_path] watch`
 
-along with a live-reload server, such as the popular VS Code extension.
+along with a live-reload server.
 
 ## Config Options
 
@@ -63,6 +65,7 @@ You can specify a config file path as a command line argument with build.py or w
 |TEMPLATE_VAR_START|string*|\{\{|The beginning sentinel for a variable within a template.|
 |TEMPLATE_VAR_END|string*|\}\}|The ending sentinel for a variable within a template.|
 |TEMPLATE_SECTION_SPLIT|string*|\n%\n|The sequence used to separate the sections of a template.|
+|INNER_HTML_VAR|string*|\_inner\_|The template variable that inserts the innerHTML of the template.|
 |EMPTY_VAR_REPLACE|boolean|true|If false, variables in a template that are not assigned when the template is used, and have no default with not be replaced. So {{var}} will appear in the HTML literally.|
 |EMPTY_VAR_VALUE|string*|""|The string that will replace unassigned variables if EMPTY_VAR_REPLACE is true. So {{var}} will be replaced by the empty string by default.|
 |INPUT_DIR|string|.|Path to the directory to scan for HTML files.
@@ -81,11 +84,10 @@ You can specify a config file path as a command line argument with build.py or w
 # Drawbacks
 
 - lots of file copying
-- two git repos potentially
+- two git repos potentially, or you can use a web hook like Github Actions
 - HTML files output with funky formatting (from BeautifulSoup)
 
 # TODOs
 
 - Selective processing when detecting a file changed (as opposed to just running the whole thing again)
 - Don't lose HTML file formatting when building
-- Ability to have content inside of custom tags, like ```<custom><p>Stuff here</p></custom>```

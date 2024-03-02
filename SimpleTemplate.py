@@ -1,10 +1,10 @@
-import os, json, time, shutil, bs4
+import os, json, time, shutil
+from os.path import normpath
 from fnmatch import fnmatch
 from bs4 import BeautifulSoup
 from FileObject import FileObject
 from Template import Template
 from TemplateLoader import TemplateLoader
-from os.path import normpath
 import Dependencies
 
 
@@ -21,6 +21,7 @@ class SimpleTemplate:
             "TEMPLATE_VAR_START": "{{",
             "TEMPLATE_VAR_END": "}}",
             "TEMPLATE_SECTION_SPLIT": "\n%\n",
+            "INNER_HTML_VAR": "_inner_",
             "EMPTY_VAR_REPLACE": True,
             "EMPTY_VAR_VALUE": "",
             "INPUT_DIR": ".",
@@ -76,15 +77,7 @@ class SimpleTemplate:
         for key in self.config.keys():
             if key in config:
                 self.config[key] = config[key]
-
-    def SetInputDir(self, path):
-        self.config["INPUT_DIR"] = path
-
-    def SetOutputDir(self, path):
-        self.config["OUTPUT_DIR"] = path
-
-    def SetTemplateDir(self, path):
-        self.config["TEMPLATE_DIR"] = path
+        
 
     ########## FILE LOADING ##########
 
@@ -94,6 +87,8 @@ class SimpleTemplate:
         for root, dirs, files in os.walk(self.config["INPUT_DIR"]):
             for file in files:
                 fp = normpath(os.path.join(root, file))
+                if normpath(self.config["INPUT_DIR"]) == ".":
+                    fp = "./" + fp
                 if file.endswith(".html") and not self.ShouldExclude(excludePatters, fp):
                     # print("Loading html", fp)
                     obj = FileObject()
@@ -170,8 +165,8 @@ class SimpleTemplate:
                 value = variables[v]
             elif template.defaults is not None and v in template.defaults:
                 value = template.defaults[v]
-            elif self.emptyVarReplace:
-                value = self.emptyVarValue
+            elif self.config["EMPTY_VAR_REPLACE"]:
+                value = self.config["EMPTY_VAR_VALUE"]
 
             # replace the variable with the value if it exists
             if value is not None:
@@ -181,6 +176,7 @@ class SimpleTemplate:
 
     def FillFile(self, file):
         # TODO is there a better way to do this? possibly without using bs4?
+        # TODO recursive filling
         templateIds = [t.id for t in self.templates]
         soup = BeautifulSoup(file.content, "html.parser")
         elem = soup.find()
@@ -190,6 +186,7 @@ class SimpleTemplate:
             # replace template tags with their filled content
             if elem.name in templateIds:
                 t = next(t for t in self.templates if t.id == elem.name)
+                elem.attrs[self.config["INNER_HTML_VAR"]] = elem.decode_contents() # set inner html to a variable
                 newelem = BeautifulSoup(self.FillTemplate(t, elem.attrs), "html.parser")
                 elem.replace_with(newelem)
             elem = nextelem
@@ -207,7 +204,7 @@ class SimpleTemplate:
     ########## OUTPUT ##########
 
     def CopyInputDirectory(self):
-        excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
+        excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"] + [self.config["OUTPUT_DIR"] + "/*"]
         def excludeFn(path, names):
             excluded = []
             for name in names:
@@ -218,13 +215,13 @@ class SimpleTemplate:
                     excluded.append(name)
             return excluded
         
-        # print("will copy", self.config["INPUT_DIR"], "to", self.config["OUTPUT_DIR"])
         shutil.copytree(self.config["INPUT_DIR"], self.config["OUTPUT_DIR"], dirs_exist_ok=True, ignore=excludeFn)
+
 
     def CopyFile(self, fp):
         excludePatterns = self.config["EXCLUDE_ALL"] + self.config["EXCLUDE_COPY"]
         if not self.ShouldExclude(excludePatterns, fp):
-            newFp = fp.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]))
+            newFp = fp.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]), 1)
             if newFp == fp:
                 print("Will not overwrite", fp, self.config["INPUT_DIR"], self.config["OUTPUT_DIR"])
                 return
@@ -239,7 +236,7 @@ class SimpleTemplate:
             if not h.dependencies:
                 continue
             # set path to replace input directory with output directory
-            path = h.path.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]))
+            path = h.path.replace(normpath(self.config["INPUT_DIR"]), normpath(self.config["OUTPUT_DIR"]), 1)
             # print("will write", h.path, "to", path)
             if h.path == path and not self.config["OVERWRITE_ALLOWED"]:
                 print("Will not overwrite", h.path)

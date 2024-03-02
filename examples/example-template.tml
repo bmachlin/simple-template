@@ -1,0 +1,10 @@
+example-template
+%
+var3=font-weight: bold;
+%
+<section>
+    <h1>The title is {{var1}}</h1>
+    <h2>The heading is {{var2}}</h2>
+    {{_inner_}}
+    <span style="{{var3}}">Hello, world.</span>
+</section>
